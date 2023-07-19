@@ -1,0 +1,12 @@
+namespace AvaloniaInside.MediaPlayer.FFmpeg;
+
+internal enum AVStreamParseType
+{
+    AVSTREAM_PARSE_NONE = 0,
+    AVSTREAM_PARSE_FULL = 1,
+    AVSTREAM_PARSE_HEADERS = 2,
+    AVSTREAM_PARSE_TIMESTAMPS = 3,
+    AVSTREAM_PARSE_FULL_ONCE = 4,
+    AVSTREAM_PARSE_FULL_RAW = 5,
+    AVSTREAM_PARSE_FULL_ONCE_RAW = 6
+}

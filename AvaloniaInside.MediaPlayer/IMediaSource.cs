@@ -12,10 +12,12 @@ public interface IMediaSource
     public void Load(Stream stream);
     public bool IsLoaded { get; }
     public bool IsBuffering { get; }
+    public bool IsEndOfMedia { get; }
     
     public TimeSpan MediaLength { get; }
     public PlayState PlayState { get; }
     public event EventHandler<MediaSourceLoadedEventArgs> Loaded;
     public event EventHandler<MediaSourceBufferingEventArgs> Buffering;
     public event EventHandler<PlayStateChangedEventArgs> PlayStateChanged;
+    public event EventHandler<EndOfMediaEventArgs> EndOfMedia;
 }

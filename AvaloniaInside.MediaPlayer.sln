@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Avalonia.MediaPlayer", "AvaloniaInside.MediaPlayer\AvaloniaInside.MediaPlayer.csproj", "{D11D9CF4-08A7-400D-8BC2-B0101818FA55}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaPlayer.Sample", "MediaPlayer.Sample\MediaPlayer.Sample.csproj", "{4415F239-426A-4994-8CAF-AEE3B2ADADC9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{D11D9CF4-08A7-400D-8BC2-B0101818FA55}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D11D9CF4-08A7-400D-8BC2-B0101818FA55}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D11D9CF4-08A7-400D-8BC2-B0101818FA55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4415F239-426A-4994-8CAF-AEE3B2ADADC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4415F239-426A-4994-8CAF-AEE3B2ADADC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4415F239-426A-4994-8CAF-AEE3B2ADADC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4415F239-426A-4994-8CAF-AEE3B2ADADC9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
