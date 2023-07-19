@@ -12,6 +12,6 @@ public class MainWindowViewModel : ViewModelBase
         AvaloniaInside.MediaPlayer.MediaPlayer player = new();
 
         var source = new MediaSource();
-        source.Load("/Users/mw/Downloads/file_example_MP3_1MG.mp3");
+        source.Load("/Users/mw/Downloads/sample-5s.mp4");
     }
 }

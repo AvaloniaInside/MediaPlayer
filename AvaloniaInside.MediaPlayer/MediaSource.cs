@@ -1,7 +1,6 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
-using AvaloniaInside.MediaPlayer.FFmpeg;
-using static AvaloniaInside.MediaPlayer.FFmpeg.AVInterop;
+using FFmpeg.AutoGen;
 
 namespace AvaloniaInside.MediaPlayer;
 
@@ -15,13 +14,13 @@ public unsafe class MediaSource : IMediaSource, IDisposable
     private AVFrame* _audioRawBuffer;
     private int _audioStreamId = -1;
     private SwrContext* _audioSwContext;
+    private Thread _decodeThread;
 
     private AVFormatContext* _formatContext;
+    private bool _playingToEof;
+    private bool _runDecodeThread;
     private int _videoStreamId = -1;
     private SwsContext* _videoSwContext;
-    private Thread _decodeThread;
-    private bool _runDecodeThread;
-    private bool _playingToEof;
     public int AudioSampleRate => HasAudio ? _audioContext->sample_rate : -1;
 
     public int AudioChannelCount { get; private set; } = -1;
@@ -34,10 +33,12 @@ public unsafe class MediaSource : IMediaSource, IDisposable
     public bool HasVideo => _videoStreamId != -1;
     public bool HasAudio => _audioStreamId != -1;
     public Size VideoSize { get; }
+
     public void Load(string path)
     {
+        ffmpeg.RootPath = "/opt/homebrew/Cellar/ffmpeg/6.0/lib/";
         AVFormatContext* formatContext;
-        int ret = avformat_open_input(&formatContext, path, null, null);
+        var ret = ffmpeg.avformat_open_input(&formatContext, path, null, null);
         if (ret != 0 || formatContext == null)
         {
             Console.WriteLine("Failed to open file: " + path);
@@ -45,7 +46,7 @@ public unsafe class MediaSource : IMediaSource, IDisposable
         }
 
         _formatContext = formatContext;
-        if (avformat_find_stream_info(formatContext, null) < 0)
+        if (ffmpeg.avformat_find_stream_info(formatContext, null) < 0)
         {
             Console.WriteLine("Failed to find stream information: " + path);
             return;
@@ -53,44 +54,30 @@ public unsafe class MediaSource : IMediaSource, IDisposable
 
         for (var i = 0; i < formatContext->nb_streams; i++)
         {
-            AVStream* stream = formatContext->streams[i];
+            var stream = formatContext->streams[i];
+            var codecParameters = stream->codecpar;
 
-            Console.WriteLine("Stream Details:");
-            Console.WriteLine($"Index: {stream->index}");
-            Console.WriteLine($"Codec Type: {stream->codec->codec_type}");
-            Console.WriteLine($"Codec ID: {stream->codec->codec_id}");
-            Console.WriteLine($"Duration: {stream->duration}");
-            Console.WriteLine($"Bit Rate: {stream->codec->bit_rate}");
-            Console.WriteLine($"Inspecting stream {i} out of {formatContext->nb_streams}");
-            
             if (formatContext->streams[i] == null)
             {
                 Console.WriteLine("Stream is null!");
                 continue;
             }
-            if (formatContext->streams[i]->codec == null)
+
+            if (codecParameters->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
             {
-                Console.WriteLine("Codec is null!");
-                continue;
+                if (_audioStreamId == -1) _audioStreamId = i;
             }
 
-            switch (formatContext->streams[i]->codec->codec_type)
+            if (codecParameters->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO)
             {
-                case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    if (_videoStreamId == -1) _videoStreamId = i;
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    if (_audioStreamId == -1) _audioStreamId = i;
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
+                if (_videoStreamId == -1) _videoStreamId = i;
             }
         }
 
         InitAudio();
 
         //InitVideo();
-        if (_formatContext->duration != AVConstant.AV_NOPTS_VALUE)
+        if (_formatContext->duration != ffmpeg.AV_NOPTS_VALUE)
             MediaLength = TimeSpan.FromTicks((long)(_formatContext->duration / 1000d * TimeSpan.TicksPerMillisecond));
         if (HasVideo || HasAudio)
         {
@@ -132,81 +119,165 @@ public unsafe class MediaSource : IMediaSource, IDisposable
 
     private void InitAudio()
     {
-        _audioContext = _formatContext->streams[_audioStreamId]->codec;
-        if (_audioContext == null)
-        {
-            Console.WriteLine("Failed to get audio codec context");
-            _audioStreamId = -1;
-            return;
-        }
+        // Get audio stream 
+        var audioStream = _formatContext->streams[_audioStreamId];
+        var codecParameters = audioStream->codecpar;
 
-        _audioCodec = avcodec_find_decoder(_audioContext->codec_id);
-        if (_audioCodec == null)
+        var audioCodec = ffmpeg.avcodec_find_decoder(codecParameters->codec_id);
+        string audioCodecName = ffmpeg.avcodec_get_name(codecParameters->codec_id);
+        if (audioCodec == null)
         {
             Console.WriteLine("Failed to find audio codec");
             _audioStreamId = -1;
             return;
         }
 
-        if (avcodec_open2(_audioContext, _audioCodec, null) != 0)
+        var audioContext = ffmpeg.avcodec_alloc_context3(audioCodec);
+        if (audioContext == null)
         {
-            Console.WriteLine("Failed to load audio codec");
+            Console.WriteLine("Failed to allocate audio codec context");
             _audioStreamId = -1;
             return;
         }
 
-        _audioRawBuffer = av_frame_alloc();
-        if (_audioRawBuffer == null)
+        if (ffmpeg.avcodec_parameters_to_context(audioContext, codecParameters) < 0)
+        {
+            Console.WriteLine("Failed to initialize audio codec context");
+            ffmpeg.avcodec_free_context(&audioContext);
+            _audioStreamId = -1;
+            return;
+        }
+
+        if (ffmpeg.avcodec_open2(audioContext, audioCodec, null) != 0)
+        {
+            Console.WriteLine("Failed to open audio codec");
+            ffmpeg.avcodec_free_context(&audioContext);
+            _audioStreamId = -1;
+            return;
+        }
+
+        var audioRawBuffer = ffmpeg.av_frame_alloc();
+        if (audioRawBuffer == null)
         {
             Console.WriteLine("Failed to allocate audio buffer");
+            ffmpeg.avcodec_close(audioContext);
+            ffmpeg.avcodec_free_context(&audioContext);
             _audioStreamId = -1;
             return;
         }
 
-        var audioPcmBuffer = _audioPcmBuffer;
-        if (av_samples_alloc(&audioPcmBuffer, null, _audioContext->channels,
-                av_samples_get_buffer_size(null, _audioContext->channels, MaxAudioSamples,
-                    AVSampleFormat.AV_SAMPLE_FMT_S16, 0), AVSampleFormat.AV_SAMPLE_FMT_S16, 0) < 0)
-        {
-            Console.WriteLine("Failed to create audio samples buffer");
-            _audioStreamId = -1;
-            return;
-        }
-
-        _audioPcmBuffer = audioPcmBuffer;
-
-        av_frame_unref(_audioRawBuffer);
-        _audioSwContext = swr_alloc();
-        if (_videoSwContext == null)
+        var audioSwContext =ffmpeg. swr_alloc_set_opts(null,
+            ffmpeg.av_get_default_channel_layout(audioContext->channels), AVSampleFormat.AV_SAMPLE_FMT_S16,
+            audioContext->sample_rate,
+            ffmpeg.av_get_default_channel_layout(audioContext->channels), audioContext->sample_fmt,
+            audioContext->sample_rate, 0, null);
+        if (audioSwContext == null)
         {
             Console.WriteLine("Failed to create audio resampling context");
+            ffmpeg.av_frame_free(&audioRawBuffer);
+            ffmpeg.avcodec_close(audioContext);
+            ffmpeg.avcodec_free_context(&audioContext);
             _audioStreamId = -1;
             return;
         }
 
-        var inchanlayout = _audioContext->channel_layout;
-        if (inchanlayout == 0) inchanlayout = (ulong)av_get_default_channel_layout(_audioContext->channels);
-        var outchanlayout = inchanlayout;
-        if (outchanlayout != AVConstant.AV_CH_LAYOUT_MONO) outchanlayout = AVConstant.AV_CH_LAYOUT_STEREO;
-        av_opt_set_int(_audioSwContext, "in_channel_layout", (long)inchanlayout, 0);
-        av_opt_set_int(_audioSwContext, "out_channel_layout", (long)outchanlayout, 0);
-        av_opt_set_int(_audioSwContext, "in_sample_rate", _audioContext->sample_rate, 0);
-        av_opt_set_int(_audioSwContext, "out_sample_rate", _audioContext->sample_rate, 0);
-        av_opt_set_sample_fmt(_audioSwContext, "in_sample_fmt", _audioContext->sample_fmt, 0);
-        av_opt_set_sample_fmt(_audioSwContext, "out_sample_fmt", AVSampleFormat.AV_SAMPLE_FMT_S16, 0);
-        swr_init(_audioSwContext);
-        AudioChannelCount = av_get_channel_layout_nb_channels(outchanlayout);
+        var swContextInit = ffmpeg.swr_init(audioSwContext);
+        if (swContextInit != 0)
+        {
+            Console.WriteLine("Failed to initialize audio resampling context");
+            ffmpeg.swr_free(&audioSwContext);
+            ffmpeg.av_frame_free(&audioRawBuffer);
+            ffmpeg.avcodec_close(audioContext);
+            ffmpeg.avcodec_free_context(&audioContext);
+            _audioStreamId = -1;
+            return;
+        }
 
+        _audioRawBuffer = audioRawBuffer;
+        _audioSwContext = audioSwContext;
+        _audioContext = audioContext;
+        AudioChannelCount = 2;
         _audioPlayback = new AudioPlayback(this);
     }
 
+    // private void InitAudioOld()
+    // {
+    //     // Get audio stream 
+    //     _audioContext = _formatContext->streams[_audioStreamId]->codec;
+    //     if (_audioContext == null)
+    //     {
+    //         Console.WriteLine("Failed to get audio codec context");
+    //         _audioStreamId = -1;
+    //         return;
+    //     }
+    //
+    //     _audioCodec = avcodec_find_decoder(_audioContext->codec_id);
+    //     if (_audioCodec == null)
+    //     {
+    //         Console.WriteLine("Failed to find audio codec");
+    //         _audioStreamId = -1;
+    //         return;
+    //     }
+    //
+    //     if (avcodec_open2(_audioContext, _audioCodec, null) != 0)
+    //     {
+    //         Console.WriteLine("Failed to load audio codec");
+    //         _audioStreamId = -1;
+    //         return;
+    //     }
+    //
+    //     _audioRawBuffer = av_frame_alloc();
+    //     if (_audioRawBuffer == null)
+    //     {
+    //         Console.WriteLine("Failed to allocate audio buffer");
+    //         _audioStreamId = -1;
+    //         return;
+    //     }
+    //
+    //     var audioPcmBuffer = _audioPcmBuffer;
+    //     if (av_samples_alloc(&audioPcmBuffer, null, _audioContext->channels,
+    //             av_samples_get_buffer_size(null, _audioContext->channels, MaxAudioSamples,
+    //                 AVSampleFormat.AV_SAMPLE_FMT_S16, 0), AVSampleFormat.AV_SAMPLE_FMT_S16, 0) < 0)
+    //     {
+    //         Console.WriteLine("Failed to create audio samples buffer");
+    //         _audioStreamId = -1;
+    //         return;
+    //     }
+    //
+    //     _audioPcmBuffer = audioPcmBuffer;
+    //
+    //     av_frame_unref(_audioRawBuffer);
+    //     _audioSwContext = swr_alloc();
+    //     if (_videoSwContext == null)
+    //     {
+    //         Console.WriteLine("Failed to create audio resampling context");
+    //         _audioStreamId = -1;
+    //         return;
+    //     }
+    //
+    //     var inchanlayout = _audioContext->channel_layout;
+    //     if (inchanlayout == 0) inchanlayout = (ulong)av_get_default_channel_layout(_audioContext->channels);
+    //     var outchanlayout = inchanlayout;
+    //     if (outchanlayout != AVConstant.AV_CH_LAYOUT_MONO) outchanlayout = AVConstant.AV_CH_LAYOUT_STEREO;
+    //     av_opt_set_int(_audioSwContext, "in_channel_layout", (long)inchanlayout, 0);
+    //     av_opt_set_int(_audioSwContext, "out_channel_layout", (long)outchanlayout, 0);
+    //     av_opt_set_int(_audioSwContext, "in_sample_rate", _audioContext->sample_rate, 0);
+    //     av_opt_set_int(_audioSwContext, "out_sample_rate", _audioContext->sample_rate, 0);
+    //     av_opt_set_sample_fmt(_audioSwContext, "in_sample_fmt", _audioContext->sample_fmt, 0);
+    //     av_opt_set_sample_fmt(_audioSwContext, "out_sample_fmt", AVSampleFormat.AV_SAMPLE_FMT_S16, 0);
+    //     swr_init(_audioSwContext);
+    //     AudioChannelCount = av_get_channel_layout_nb_channels(outchanlayout);
+    //
+    //     _audioPlayback = new AudioPlayback(this);
+    // }
+
     private bool DecodeAudio(AVPacket* packet)
     {
-        if (avcodec_send_packet(_audioContext, packet) < 0) return false;
-        if (avcodec_receive_frame(_audioContext, _audioRawBuffer) < 0) return false;
+        if (ffmpeg.avcodec_send_packet(_audioContext, packet) < 0) return false;
+        if (ffmpeg.avcodec_receive_frame(_audioContext, _audioRawBuffer) < 0) return false;
 
         var audioPcmBuffer = _audioPcmBuffer;
-        var convertlength = swr_convert(_audioSwContext, &audioPcmBuffer, _audioRawBuffer->nb_samples,
+        var convertlength = ffmpeg.swr_convert(_audioSwContext, &audioPcmBuffer, _audioRawBuffer->nb_samples,
             _audioRawBuffer->extended_data, _audioRawBuffer->nb_samples);
 
         if (convertlength <= 0) return false;
@@ -225,48 +296,87 @@ public unsafe class MediaSource : IMediaSource, IDisposable
         Marshal.Copy((IntPtr)audioPcmBuffer, audioData, 0, length);
         return audioData;
     }
-    
-    private void StartDecodeThread() {
-        if(_decodeThread != null)
+
+    private void StartDecodeThread()
+    {
+        if (_decodeThread != null)
             return;
         _runDecodeThread = true;
         _decodeThread = new Thread(DecodeThreadRun) { Name = "Video Decode" };
         _decodeThread.Start();
     }
 
-    private void StopDecodeThread() {
-        if(_decodeThread == null || !_runDecodeThread)
+    private void StopDecodeThread()
+    {
+        if (_decodeThread == null || !_runDecodeThread)
             return;
         _runDecodeThread = false;
         _decodeThread.Join();
         _decodeThread = null;
     }
 
-    private void DecodeThreadRun() {
-        var packet = av_packet_alloc();
-        while(_runDecodeThread) {
-            while(_runDecodeThread && !_playingToEof) {
-                bool validPacket = false;
-                while(!validPacket && _runDecodeThread) {
-                    av_init_packet(packet);
-                    if(av_read_frame(_formatContext, packet) == 0) {
-                        if(packet->stream_index == _videoStreamId) {
+    private void DecodeThreadRun()
+    {
+        var packet = ffmpeg.av_packet_alloc();
+        while (_runDecodeThread)
+        {
+            while (_runDecodeThread && !_playingToEof)
+            {
+                var validPacket = false;
+                while (!validPacket && _runDecodeThread)
+                {
+                    ffmpeg.av_init_packet(packet);
+                    if (ffmpeg.av_read_frame(_formatContext, packet) == 0)
+                    {
+                        if (packet->stream_index == _videoStreamId)
+                        {
                             //validPacket = DecodeVideo(packet);
                         }
-                        else if(packet->stream_index == _audioStreamId) {
+                        else if (packet->stream_index == _audioStreamId)
+                        {
                             validPacket = DecodeAudio(packet);
                         }
-                        else Console.WriteLine("Discarding packet for stream " + packet->stream_index);
+                        else
+                        {
+                            Console.WriteLine("Discarding packet for stream " + packet->stream_index);
+                        }
                     }
-                    else {
+                    else
+                    {
                         _playingToEof = true;
                         validPacket = true;
                     }
-                    av_packet_unref(packet);
+
+                    ffmpeg.av_packet_unref(packet);
                 }
             }
+
             Thread.Sleep(50);
         }
-        av_packet_free(&packet);
+
+        ffmpeg.av_packet_free(&packet);
+    }
+    
+    static ulong select_channel_layout(AVCodec* codec)
+    {
+        ulong* p;
+        ulong best_ch_layout = 0;
+        int best_nb_channels = 0;
+
+        if (codec->channel_layouts == null)
+            return ffmpeg.AV_CH_LAYOUT_STEREO;
+
+        p = codec->channel_layouts;
+        while (*p != 0) {
+            int nb_channels = ffmpeg.av_get_channel_layout_nb_channels(*p);
+
+            if (nb_channels > best_nb_channels) {
+                best_ch_layout    = *p;
+                best_nb_channels = nb_channels;
+            }
+            p++;
+        }
+
+        return best_ch_layout;
     }
 }

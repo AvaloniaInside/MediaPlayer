@@ -9,10 +9,6 @@ g
 .AvaloniaInside.MediaPlayer/IMediaController.cs,3/8/38595b39feec123c35a5353f94937774cbb95633
 W
 'AvaloniaInside.MediaPlayer/PlayState.cs,c/7/c765eb0a35de2329d3b48ee9dc1ef060c19c843b
-_
-/AvaloniaInside.MediaPlayer/FFmpeg/AVRational.cs,9/4/94878d784fc779ec4b70eb6c342495e814b541d0
-\
-,AvaloniaInside.MediaPlayer/FFmpeg/AVFrame.cs,3/d/3d03cb68783fb07c4052b8e38e2b3d8468c0915f
 ]
 -AvaloniaInside.MediaPlayer/MediaController.cs,8/2/827a3745a926a2c65915d5881ad6f1adc255b278
 Z

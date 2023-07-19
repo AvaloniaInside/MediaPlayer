@@ -15,9 +15,9 @@ public class AudioPlayback : Playback<AudioPacket>
             _channelCount = MediaSource.AudioChannelCount; // Assuming DataSource initializes with some default or known values
             _sampleRate = MediaSource.AudioSampleRate;
 
-            waveProvider = new BufferedWaveProvider(new WaveFormat(_sampleRate, _channelCount));
-            outputDevice = new WaveOutEvent();
-            outputDevice.Init(waveProvider);
+            // waveProvider = new BufferedWaveProvider(new WaveFormat(_sampleRate, _channelCount));
+            // outputDevice = new WaveOutEvent();
+            // outputDevice.Init(waveProvider);
         }
 
         public override void Dispose()
@@ -57,6 +57,7 @@ public class AudioPlayback : Playback<AudioPacket>
 
         internal void Push(byte[] audioData)
         {
+            return;
             // Check buffer status and fill as necessary
             int bufferAvailable = waveProvider.BufferLength - waveProvider.BufferedBytes;
 
