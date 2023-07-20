@@ -2,9 +2,11 @@ namespace AvaloniaInside.MediaPlayer;
 
 public interface IMediaPlayer
 {
-    public IMediaSource Source { get; }
-    public IMediaController Controller { get; }
-    
-    public void SetSource(IMediaSource source);
-    public void SetController(IMediaController controller);
+    public IMediaSource MediaSource { get; }
+    public void Play();
+    public void Pause();
+
+    public PlayState PlayState { get; }
+    public void Seek(TimeSpan position);
+    public TimeSpan PlayingOffset { get; }
 }

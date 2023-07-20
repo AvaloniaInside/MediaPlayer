@@ -1,17 +1,130 @@
+using System.Threading;
+
 namespace AvaloniaInside.MediaPlayer;
 
 public class MediaPlayer : IMediaPlayer
 {
-    public IMediaSource Source { get; }
-    public IMediaController Controller { get; }
-    
-    public void SetSource(IMediaSource source)
+
+    private IMediaSource? _mediaSource;
+    private DateTime _lastUpdate;
+    private CancellationTokenSource? _cancellationTokenSource;
+    private readonly Playback<VideoPacket>? _videoPlayback;
+    private readonly Playback<AudioPacket>? _audioPlayback;
+
+    public MediaPlayer(Playback<VideoPacket> videoPlayback, Playback<AudioPacket> audioPlayback)
     {
-        throw new NotImplementedException();
+        _videoPlayback = videoPlayback;
+        _audioPlayback = audioPlayback;
     }
 
-    public void SetController(IMediaController controller)
+    public IMediaSource? MediaSource
     {
-        throw new NotImplementedException();
+        get => _mediaSource;
+        set
+        {
+            TerminateMediaSource();
+            _mediaSource = value;
+        }
+    }
+
+    public PlayState PlayState { get; set; }
+
+    public TimeSpan PlayingOffset { get; set; }
+
+    public void Play()
+    {
+        if (MediaSource == null)
+            return;
+
+        if (_cancellationTokenSource != null)
+            return;
+
+        _lastUpdate = DateTime.Now;
+        PlayState = PlayState.Playing;
+
+        _cancellationTokenSource = new CancellationTokenSource();
+        Task.Run(() => InternalPlayAsync(_cancellationTokenSource.Token));
+        Task.Run(() => InternalRenderFrameAsync(_cancellationTokenSource.Token));
+
+        _videoPlayback?.SourceReloaded();
+        _audioPlayback?.SourceReloaded();
+    }
+
+    private async Task InternalPlayAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var packet = MediaSource?.NextPocket();
+                if (packet != null)
+                {
+                    switch (packet)
+                    {
+                        case AudioPacket audioPacket:
+                            _audioPlayback.PushPacket(audioPacket);
+                            break;
+                        case VideoPacket videoPacket:
+                            _videoPlayback.PushPacket(videoPacket);
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+            }
+
+            //Task.Delay(50, cancellationToken);
+        }
+    }
+
+    private async Task InternalRenderFrameAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            Update();
+        }
+    }
+
+    public void Update()
+    {
+        if (PlayingOffset > MediaSource.MediaLength)
+        {
+            Pause();
+            PlayState = PlayState.Stopped;
+            //IsEndOfFileReached = true;
+        }
+        var now = DateTime.Now;
+        var deltaTime = now - _lastUpdate;
+        _lastUpdate = now;
+        if (PlayState == PlayState.Playing) PlayingOffset += deltaTime;
+
+        // avoid huge jumps
+        //if(deltaTime < TimeSpan.FromMilliseconds(100))
+        _videoPlayback?.Update(deltaTime);
+        _audioPlayback?.Update(deltaTime);
+    }
+
+    public void Pause()
+    {
+        _cancellationTokenSource?.Cancel();
+        _cancellationTokenSource?.Dispose();
+
+        _cancellationTokenSource = null;
+        PlayState = PlayState.Paused;
+    }
+
+    public void Seek(TimeSpan position) => throw new NotImplementedException();
+
+    private void TerminateMediaSource()
+    {
+        if (_mediaSource == null) return;
+
+        Pause();
+        _mediaSource.Dispose();
+        _mediaSource = null;
+
+        PlayState = PlayState.Stopped;
     }
 }

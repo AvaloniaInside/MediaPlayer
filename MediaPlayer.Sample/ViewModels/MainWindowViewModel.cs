@@ -9,9 +9,12 @@ public class MainWindowViewModel : ViewModelBase
 
     public void Test()
     {
-        AvaloniaInside.MediaPlayer.MediaPlayer player = new();
-
         var source = new MediaSource();
-        source.Load("/Users/mw/Downloads/sample-5s.mp4");
+        source.Load("C:\\Users\\Omid\\Personal\\Omid\\Galery\\Music\\Amir\\Almoraima.mp3");
+
+
+        var player = new AvaloniaInside.MediaPlayer.MediaPlayer(null, new AudioPlayback(source));
+        player.MediaSource = source;
+        player.Play();
     }
 }
