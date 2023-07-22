@@ -3,6 +3,7 @@
         xmlns:vm="using:MediaPlayer.Sample.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mediaPlayer="clr-namespace:AvaloniaInside.MediaPlayer;assembly=AvaloniaInside.MediaPlayer"
         mc:Ignorable="d"
         d:DesignWidth="800"
         d:DesignHeight="450"
@@ -17,6 +18,14 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <Button Content="Play"
-            Command="{Binding  Test}" />
+    <Grid>
+        <mediaPlayer:MediaPlayerElement>
+            <mediaPlayer:MediaPlayerElement.MediaSource>
+                <mediaPlayer:MediaSource />
+            </mediaPlayer:MediaPlayerElement.MediaSource>
+            <mediaPlayer:MediaController/>
+        </mediaPlayer:MediaPlayerElement>
+        <Button Content="Play"
+                Command="{Binding  Test}" />
+    </Grid>
 </Window>

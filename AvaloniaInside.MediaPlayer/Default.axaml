@@ -1,0 +1,54 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mediaPlayer="clr-namespace:AvaloniaInside.MediaPlayer">
+
+    <ControlTheme x:Key="{x:Type mediaPlayer:MediaPlayerElement}"
+                  TargetType="{x:Type mediaPlayer:MediaPlayerElement}">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border>
+                    <Panel>
+                        <Panel Background="DarkSlateGray">
+                            <TextBlock VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Foreground="White">
+                                Video render goes here
+                            </TextBlock>
+                        </Panel>
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          CornerRadius="{TemplateBinding CornerRadius}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Content="{TemplateBinding Content}"
+                                          Padding="{TemplateBinding Padding}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type mediaPlayer:MediaController}"
+                  TargetType="{x:Type mediaPlayer:MediaController}">
+        <Setter Property="VerticalAlignment"
+                Value="Bottom" />
+        <Setter Property="HorizontalAlignment"
+                Value="Stretch" />
+        <Setter Property="Height"
+                Value="80" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border>
+                    <Panel>
+                        <Rectangle Fill="Black"
+                                   Opacity="0.6" />
+                        <TextBlock>This is the MediaController</TextBlock>
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>
