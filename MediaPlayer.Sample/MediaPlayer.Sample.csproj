@@ -1,12 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <OutputType>WinExe</OutputType>
-        <TargetFramework>net7.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+		<TargetFrameworks>net6.0-macos</TargetFrameworks>
         <Nullable>enable</Nullable>
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    </PropertyGroup>
+		<ApplicationId>com.example.project</ApplicationId>
+		<RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
+	</PropertyGroup>
 
     <ItemGroup>
         <Folder Include="Models\"/>

@@ -37,7 +37,7 @@ public unsafe class MediaSource : IMediaSource, IDisposable
 
     public void Load(string path)
     {
-        //ffmpeg.RootPath = "/opt/homebrew/Cellar/ffmpeg/6.0/lib/";
+        ffmpeg.RootPath = "/opt/homebrew/Cellar/ffmpeg/6.0/lib/";
         AVFormatContext* formatContext;
         var ret = ffmpeg.avformat_open_input(&formatContext, path, null, null);
         if (ret != 0 || formatContext == null)
@@ -116,7 +116,7 @@ public unsafe class MediaSource : IMediaSource, IDisposable
 
     private void InitAudio()
     {
-        // Get audio stream 
+        // Get audio stream
         var audioStream = _formatContext->streams[_audioStreamId];
         var codecParameters = audioStream->codecpar;
 
@@ -220,7 +220,7 @@ public unsafe class MediaSource : IMediaSource, IDisposable
         if (convertlength <= 0) return null;
 
         // Convert audioPcmBuffer to byte[] if it's not already
-        //var audioData = ConvertToByteArray(audioPcmBuffer, convertlength); // Assuming you have a function to convert 
+        //var audioData = ConvertToByteArray(audioPcmBuffer, convertlength); // Assuming you have a function to convert
 
         return new AudioPacket(_audioPcmBuffer, convertlength, AudioChannelCount);
     }
@@ -259,7 +259,7 @@ public unsafe class MediaSource : IMediaSource, IDisposable
     public Packet? NextPocket()
     {
         if (_playingToEof) return null;
-        
+
         var packet = GetPacket();
 
         Packet? validPacket = null;

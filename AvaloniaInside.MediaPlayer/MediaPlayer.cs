@@ -44,7 +44,7 @@ public class MediaPlayer : IMediaPlayer
 
         _cancellationTokenSource = new CancellationTokenSource();
         Task.Run(() => InternalPlayAsync(_cancellationTokenSource.Token));
-        Task.Run(() => InternalRenderFrameAsync(_cancellationTokenSource.Token));
+        //Task.Run(() => InternalRenderFrameAsync(_cancellationTokenSource.Token));
 
         _videoPlayback?.SourceReloaded();
         _audioPlayback?.SourceReloaded();
@@ -74,8 +74,9 @@ public class MediaPlayer : IMediaPlayer
             {
 
             }
+            Update();
 
-            //Task.Delay(50, cancellationToken);
+            Task.Delay(50, cancellationToken);
         }
     }
 
@@ -83,7 +84,6 @@ public class MediaPlayer : IMediaPlayer
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            Update();
         }
     }
 
