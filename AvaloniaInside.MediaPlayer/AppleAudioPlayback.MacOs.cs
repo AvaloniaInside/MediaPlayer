@@ -63,10 +63,50 @@ public class AppleAudioPlayback : Playback<AudioPacket>
 
 		playerNode.Play();
 
+		int frameLength = waveData.SampleBuffer.Length / (channels * bytesPerSample);
 		// Create an AVAudioPCMBuffer and set the audio data
 		var buffer = new AVAudioPcmBuffer(audioFormat, (uint)waveData.TotalSampleCount / (uint)bytesPerSample);
 
-		buffer.MutableAudioBufferList.SetData(0, NSData.FromArray(waveData.SampleBuffer).Handle);
+		unsafe
+		{
+			var floatChannelData = (float**)buffer.FloatChannelData;
+			for (int channel = 0; channel < channels; channel++)
+			{
+				var dataPointer = floatChannelData[channel];
+				int offset = channel * bytesPerSample;
+
+				for (int i = 0; i < frameLength; i++)
+				{
+					float value;
+					if (bytesPerSample == 2)
+					{
+						short sampleValue = BitConverter.ToInt16(waveData.SampleBuffer, (i * channels + channel) * 2);
+						value = (float)sampleValue / short.MaxValue;
+					}
+					else // Assuming bytesPerSample == 4 for 32-bit float
+					{
+						value = BitConverter.ToSingle(waveData.SampleBuffer, (i * channels + channel) * 4);
+					}
+
+					dataPointer[i] = value;
+				}
+			}
+		}
+
+		buffer.FrameLength = (uint)frameLength;
+
+		// unsafe
+		// {
+		// 	var fl = (float**)buffer.FloatChannelData;
+		// 	for (int i = 0; i < waveData.SampleBuffer.Length / bytesPerSample; i++)
+		// 	{
+		// 		// Convert bytes to short and store in the buffer
+		// 		fl[i] = BitConverter.ToInt16(waveData.SampleBuffer, i * bytesPerSample);
+		// 	}
+		// }
+
+		// Marshal.Copy(waveData.SampleBuffer, 0, buffer.FloatChannelData, waveData.SampleBuffer.Length);
+		// buffer.FrameLength = (uint)(waveData.SampleBuffer.Length / bytesPerSample);
 		// Write audio data to the buffer
 		// unsafe
 		// {
