@@ -1,26 +1,21 @@
-﻿using System;
-using AvaloniaInside.MediaPlayer;
+﻿using AvaloniaInside.MediaPlayer;
+using FFmpeg.AutoGen;
 
 namespace MediaPlayer.Sample.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
-	public string Greeting => "Welcome to Avalonia!";
+    public string Greeting => "Welcome to Avalonia!";
 
-	public void Test()
-	{
-		var source = new MediaSource();
-		source.Load("/Users/omidmafakher/Downloads/sample-15s.mp3");
-
-
-
+    public void Test()
+    {
 #if MACOS
-		var player = new AvaloniaInside.MediaPlayer.MediaPlayer(null, new AppleAudioPlayback(source));
-#else
-		var player = new AvaloniaInside.MediaPlayer.MediaPlayer(null, new AudioPlayback(source));
+        ffmpeg.RootPath = "/opt/homebrew/Cellar/ffmpeg/6.0/lib/";
 #endif
-
-		player.MediaSource = source;
-		player.Play();
-	}
+        var player = new AvaloniaInside.MediaPlayer.MediaPlayer
+        {
+            MediaSource = new MediaSource("/Users/mw/Downloads/Free_Test_Data_1MB_MP3.mp3")
+        };
+        player.Play();
+    }
 }

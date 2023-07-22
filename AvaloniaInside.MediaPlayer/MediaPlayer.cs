@@ -1,15 +1,22 @@
-using System.Threading;
-
 namespace AvaloniaInside.MediaPlayer;
 
 public class MediaPlayer : IMediaPlayer
 {
-
-    private IMediaSource? _mediaSource;
-    private DateTime _lastUpdate;
-    private CancellationTokenSource? _cancellationTokenSource;
-    private readonly Playback<VideoPacket>? _videoPlayback;
     private readonly Playback<AudioPacket>? _audioPlayback;
+    private readonly Playback<VideoPacket>? _videoPlayback;
+    private CancellationTokenSource? _cancellationTokenSource;
+    private DateTime _lastUpdate;
+    private IMediaSource? _mediaSource;
+    private PlayState _playState = PlayState.Stopped;
+
+    public MediaPlayer()
+    {
+#if MACOS
+        _audioPlayback = new AppleAudioPlayback();
+#else
+        _audioPlayback = new AudioPlayback();
+#endif
+    }
 
     public MediaPlayer(Playback<VideoPacket> videoPlayback, Playback<AudioPacket> audioPlayback)
     {
@@ -24,12 +31,26 @@ public class MediaPlayer : IMediaPlayer
         {
             TerminateMediaSource();
             _mediaSource = value;
+            if (_mediaSource != null)
+                _mediaSource.EndOfMediaReached += MediaSourceOnEndOfMediaReached;
         }
     }
 
-    public PlayState PlayState { get; set; }
+    public PlayState PlayState
+    {
+        get => _playState;
+        private set
+        {
+            var oldState = _playState;
+            _playState = value;
+            PlayStateChanged?.Invoke(this, new PlayStateChangedEventArgs(oldState, value));
+        }
+    }
 
-    public TimeSpan PlayingOffset { get; set; }
+    public bool IsEndOfMedia => MediaSource?.IsEndOfMedia ?? false;
+
+    public TimeSpan PlayingOffset { get; private set; }
+    public event EventHandler<PlayStateChangedEventArgs>? PlayStateChanged;
 
     public void Play()
     {
@@ -39,71 +60,18 @@ public class MediaPlayer : IMediaPlayer
         if (_cancellationTokenSource != null)
             return;
 
+        MediaSource.Init();
+        _audioPlayback?.Init(MediaSource);
+        _videoPlayback?.Init(MediaSource);
+
         _lastUpdate = DateTime.Now;
         PlayState = PlayState.Playing;
 
         _cancellationTokenSource = new CancellationTokenSource();
-        Task.Run(() => InternalPlayAsync(_cancellationTokenSource.Token));
-        //Task.Run(() => InternalRenderFrameAsync(_cancellationTokenSource.Token));
+        Task.Run(() => InternalPlay(_cancellationTokenSource.Token));
 
         _videoPlayback?.SourceReloaded();
         _audioPlayback?.SourceReloaded();
-    }
-
-    private async Task InternalPlayAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            try
-            {
-                var packet = MediaSource?.NextPocket();
-                if (packet != null)
-                {
-                    switch (packet)
-                    {
-                        case AudioPacket audioPacket:
-                            _audioPlayback.PushPacket(audioPacket);
-                            break;
-                        case VideoPacket videoPacket:
-                            _videoPlayback.PushPacket(videoPacket);
-                            break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-
-            }
-            Update();
-
-            Task.Delay(50, cancellationToken);
-        }
-    }
-
-    private async Task InternalRenderFrameAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-        }
-    }
-
-    public void Update()
-    {
-        if (PlayingOffset > MediaSource.MediaLength)
-        {
-            Pause();
-            PlayState = PlayState.Stopped;
-            //IsEndOfFileReached = true;
-        }
-        var now = DateTime.Now;
-        var deltaTime = now - _lastUpdate;
-        _lastUpdate = now;
-        if (PlayState == PlayState.Playing) PlayingOffset += deltaTime;
-
-        // avoid huge jumps
-        //if(deltaTime < TimeSpan.FromMilliseconds(100))
-        _videoPlayback?.Update(deltaTime);
-        _audioPlayback?.Update(deltaTime);
     }
 
     public void Pause()
@@ -115,7 +83,56 @@ public class MediaPlayer : IMediaPlayer
         PlayState = PlayState.Paused;
     }
 
-    public void Seek(TimeSpan position) => throw new NotImplementedException();
+    public void Seek(TimeSpan position)
+    {
+        throw new NotImplementedException();
+    }
+
+    private void MediaSourceOnEndOfMediaReached(object? sender, EndOfMediaEventArgs e)
+    {
+        Pause();
+        PlayState = PlayState.Stopped;
+    }
+
+    private void InternalPlay(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var packet = MediaSource?.NextPocket();
+                if (packet != null)
+                    switch (packet)
+                    {
+                        case AudioPacket audioPacket:
+                            _audioPlayback?.PushPacket(audioPacket);
+                            break;
+                        case VideoPacket videoPacket:
+                            _videoPlayback?.PushPacket(videoPacket);
+                            break;
+                    }
+            }
+            catch (Exception ex)
+            {
+            }
+
+            Update();
+        }
+    }
+
+    private void Update()
+    {
+        var now = DateTime.Now;
+        var deltaTime = now - _lastUpdate;
+        _lastUpdate = now;
+        if (PlayState == PlayState.Playing)
+            PlayingOffset += deltaTime;
+
+        // avoid huge jumps
+        //if(deltaTime < TimeSpan.FromMilliseconds(100))
+        _videoPlayback?.Update(deltaTime);
+        _audioPlayback?.Update(deltaTime);
+    }
 
     private void TerminateMediaSource()
     {

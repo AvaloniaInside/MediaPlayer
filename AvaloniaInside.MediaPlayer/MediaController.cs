@@ -2,7 +2,7 @@ namespace AvaloniaInside.MediaPlayer;
 
 public class MediaController : IMediaController
 {
-    public IMediaSource? MediaSource { get; }
+    public IMediaPlayer? MediaPlayer { get; }
 
     public void Play()
     {
@@ -19,7 +19,7 @@ public class MediaController : IMediaController
         throw new NotImplementedException();
     }
 
-    public PlayState PlayState => MediaSource?.PlayState ?? PlayState.Stopped;
+    public PlayState PlayState => MediaPlayer?.PlayState ?? PlayState.Stopped;
 
     public bool IsPlaying { get; }
     public bool IsPaused { get; }

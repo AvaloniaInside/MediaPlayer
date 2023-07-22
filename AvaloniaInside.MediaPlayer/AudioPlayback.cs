@@ -1,83 +1,38 @@
 using NAudio.Wave;
-using NAudio.Wave.Compression;
 
 namespace AvaloniaInside.MediaPlayer;
 
 public class AudioPlayback : Playback<AudioPacket>
 {
-    private WaveOutEvent outputDevice;
-    private BufferedWaveProvider waveProvider;
+    private WaveOutEvent _outputDevice;
+    private BufferedWaveProvider _waveProvider;
 
-    protected int _channelCount;
-    protected int _sampleRate;
-
-    public AudioPlayback(IMediaSource mediaSource) : base(mediaSource)
+    public override void Init(IMediaSource mediaSource)
     {
-        _channelCount = MediaSource.AudioChannelCount; // Assuming DataSource initializes with some default or known values
-        _sampleRate = MediaSource.AudioSampleRate;
-
-        waveProvider = new BufferedWaveProvider(new WaveFormat(_sampleRate, _channelCount));
-        outputDevice = new WaveOutEvent();
-        outputDevice.Init(waveProvider);
+        base.Init(mediaSource);
+        _waveProvider = new BufferedWaveProvider(new WaveFormat(mediaSource.AudioSampleRate, mediaSource.AudioChannelCount));
+        _outputDevice = new WaveOutEvent();
+        _outputDevice.Init(_waveProvider);
+        _isInitialized = true;
     }
 
     public override void Dispose()
     {
-        outputDevice?.Stop();
-        outputDevice?.Dispose();
-        waveProvider?.ClearBuffer();
+        _outputDevice?.Stop();
+        _outputDevice?.Dispose();
+        _waveProvider?.ClearBuffer();
         base.Dispose();
     }
 
     internal override void SourceReloaded()
     {
-        if (!MediaSource.HasAudio) return;
-        _channelCount = MediaSource.AudioChannelCount;
-        _sampleRate = MediaSource.AudioSampleRate;
-        StateChanged(MediaSource.PlayState, MediaSource.PlayState);
-    }
-
-    internal override void StateChanged(PlayState oldState, PlayState newState)
-    {
-        switch (newState)
-        {
-            case PlayState.Playing:
-                outputDevice.Play();
-                break;
-
-            case PlayState.Paused:
-                outputDevice.Pause();
-                break;
-
-            case PlayState.Stopped:
-                outputDevice.Stop();
-                waveProvider.ClearBuffer();
-                break;
-        }
     }
 
     public override void Update(TimeSpan deltaTime)
     {
-        // queue new buffers
+        if(!_isInitialized)
+            throw new InvalidOperationException("Audio playback is not initialized");
         while (PacketQueue.TryTake(out var packet))
-        {
-            waveProvider.AddSamples(packet.SampleBuffer, 0, packet.SampleBuffer.Length);
-        }
+            _waveProvider.AddSamples(packet.SampleBuffer, 0, packet.SampleBuffer.Length);
     }
-
-    //internal void (byte[] audioData)
-    //{
-    //    waveProvider.AddSamples(audioData, 0, audioData.Length);
-    // Check buffer status and fill as necessary
-    //int bufferAvailable = waveProvider.BufferLength - waveProvider.BufferedBytes;
-
-    //while (PacketQueue.Any() && bufferAvailable > 0) // Assuming PacketQueue gives packets with byte[]
-    //{
-    //    if (PacketQueue.TryTake(out var packet))
-    //    {
-    //        waveProvider.AddSamples(audioData, 0, audioData.Length);
-    //        bufferAvailable -= audioData.Length;
-    //    }
-
-    //}
 }
