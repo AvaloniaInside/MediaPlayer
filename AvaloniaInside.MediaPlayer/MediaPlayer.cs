@@ -1,27 +1,30 @@
 namespace AvaloniaInside.MediaPlayer;
 
-public class MediaPlayer : IMediaPlayer
+public class MediaPlayer : IMediaPlayer, IDisposable
 {
-    private readonly Playback<AudioPacket>? _audioPlayback;
-    private readonly Playback<VideoPacket>? _videoPlayback;
+    private Playback<AudioPacket>? _audioPlayback;
     private CancellationTokenSource? _cancellationTokenSource;
     private DateTime _lastUpdate;
     private IMediaSource? _mediaSource;
     private PlayState _playState = PlayState.Stopped;
+    private Playback<VideoPacket>? _videoPlayback;
 
     public MediaPlayer()
     {
-#if MACOS
-        _audioPlayback = new AppleAudioPlayback();
-#else
-        _audioPlayback = new AudioPlayback();
-#endif
     }
 
-    public MediaPlayer(Playback<VideoPacket> videoPlayback, Playback<AudioPacket> audioPlayback)
+    public MediaPlayer(Playback<AudioPacket> audioPlayback, Playback<VideoPacket> videoPlayback)
     {
-        _videoPlayback = videoPlayback;
         _audioPlayback = audioPlayback;
+        _videoPlayback = videoPlayback;
+    }
+
+    public void Dispose()
+    {
+        TerminateMediaSource();
+        CancelAndDisposeToken();
+        _audioPlayback?.Dispose();
+        _videoPlayback?.Dispose();
     }
 
     public IMediaSource? MediaSource
@@ -31,8 +34,7 @@ public class MediaPlayer : IMediaPlayer
         {
             TerminateMediaSource();
             _mediaSource = value;
-            if (_mediaSource != null)
-                _mediaSource.EndOfMediaReached += MediaSourceOnEndOfMediaReached;
+            PrepareNewMediaSource();
         }
     }
 
@@ -54,33 +56,20 @@ public class MediaPlayer : IMediaPlayer
 
     public void Play()
     {
-        if (MediaSource == null)
+        if (_mediaSource == null || _cancellationTokenSource != null)
             return;
 
-        if (_cancellationTokenSource != null)
-            return;
-
-        MediaSource.Init();
-        _audioPlayback?.Init(MediaSource);
-        _videoPlayback?.Init(MediaSource);
-
-        _lastUpdate = DateTime.Now;
-        PlayState = PlayState.Playing;
-
+        _mediaSource.Initialize();
+        InitializePlayback();
+        ChangePlayStateTo(PlayState.Playing);
         _cancellationTokenSource = new CancellationTokenSource();
         Task.Run(() => InternalPlay(_cancellationTokenSource.Token));
-
-        _videoPlayback?.SourceReloaded();
-        _audioPlayback?.SourceReloaded();
     }
 
     public void Pause()
     {
-        _cancellationTokenSource?.Cancel();
-        _cancellationTokenSource?.Dispose();
-
-        _cancellationTokenSource = null;
-        PlayState = PlayState.Paused;
+        CancelAndDisposeToken();
+        ChangePlayStateTo(PlayState.Paused);
     }
 
     public void Seek(TimeSpan position)
@@ -88,10 +77,49 @@ public class MediaPlayer : IMediaPlayer
         throw new NotImplementedException();
     }
 
+    private void PrepareNewMediaSource()
+    {
+        if (_mediaSource != null) _mediaSource.EndOfMediaReached += MediaSourceOnEndOfMediaReached;
+    }
+
+    private void InitializePlayback()
+    {
+        BuildPlaybacks();
+        _lastUpdate = DateTime.Now;
+    }
+
+    private void ChangePlayStateTo(PlayState state)
+    {
+        PlayState = state;
+    }
+
+    private void CancelAndDisposeToken()
+    {
+        if (_cancellationTokenSource == null)
+            return;
+
+        _cancellationTokenSource.Cancel();
+        _cancellationTokenSource.Dispose();
+        _cancellationTokenSource = null;
+    }
+
+    private void BuildPlaybacks()
+    {
+        var builder = new PlaybackBuilder();
+        _audioPlayback ??= builder
+            .WithAudio()
+            .WithMediaSource(_mediaSource)
+            .Build() as Playback<AudioPacket>;
+        _videoPlayback ??= builder
+            .WithVideo()
+            .WithMediaSource(_mediaSource)
+            .Build() as Playback<VideoPacket>;
+    }
+
     private void MediaSourceOnEndOfMediaReached(object? sender, EndOfMediaEventArgs e)
     {
         Pause();
-        PlayState = PlayState.Stopped;
+        ChangePlayStateTo(PlayState.Stopped);
     }
 
     private void InternalPlay(CancellationToken cancellationToken)
@@ -105,10 +133,10 @@ public class MediaPlayer : IMediaPlayer
                     switch (packet)
                     {
                         case AudioPacket audioPacket:
-                            _audioPlayback?.PushPacket(audioPacket);
+                            _audioPlayback?.AddPacket(audioPacket);
                             break;
                         case VideoPacket videoPacket:
-                            _videoPlayback?.PushPacket(videoPacket);
+                            _videoPlayback?.AddPacket(videoPacket);
                             break;
                     }
             }
@@ -129,7 +157,6 @@ public class MediaPlayer : IMediaPlayer
             PlayingOffset += deltaTime;
 
         // avoid huge jumps
-        //if(deltaTime < TimeSpan.FromMilliseconds(100))
         _videoPlayback?.Update(deltaTime);
         _audioPlayback?.Update(deltaTime);
     }

@@ -14,8 +14,9 @@ public interface IMediaSource : IDisposable
     TimeSpan MediaLength { get; }
     int AudioSampleRate { get; }
     int AudioChannelCount { get; }
+    int BytesPerSample { get; }
 
-    public void Init();
+    public void Initialize();
 
     event EventHandler<MediaSourceLoadedEventArgs> Loaded;
     event EventHandler<MediaSourceBufferingEventArgs> Buffering;

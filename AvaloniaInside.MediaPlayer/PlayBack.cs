@@ -1,37 +1,39 @@
 using System.Collections.Concurrent;
-using AvaloniaInside.MediaPlayer;
 
 namespace AvaloniaInside.MediaPlayer;
 
-public abstract class Playback<TPacket> : IDisposable where TPacket : Packet
+public abstract class Playback<TPacket> : BasePlayback where TPacket : Packet
 {
-    protected bool _isInitialized = false;
-    protected IMediaSource _mediaSource;
     protected readonly BlockingCollection<TPacket> PacketQueue = new();
 
-    public virtual void Init(IMediaSource mediaSource)
-    {
-        _mediaSource = mediaSource;
-    }
+    /// <summary>
+    ///     Gets the packet queue count
+    /// </summary>
+    public int QueuedPacketsCount => PacketQueue.Count;
 
-    internal int QueuedPackets => PacketQueue.Count;
-
-    public virtual void Dispose()
+    public override void Dispose()
     {
         Flush();
         PacketQueue.Dispose();
+        base.Dispose();
     }
 
-    internal abstract void SourceReloaded();
-    internal virtual void Flush()
+    protected abstract void OnSourceReloaded();
+
+    /// <summary>
+    ///     Flush all packets in queue
+    /// </summary>
+    private void Flush()
     {
         while (PacketQueue.TryTake(out var packet)) packet.Dispose();
     }
 
-    internal void PushPacket(TPacket packet)
+    /// <summary>
+    ///     Add a packet to the queue
+    /// </summary>
+    /// <param name="packet"></param>
+    protected internal void AddPacket(TPacket packet)
     {
         PacketQueue.Add(packet);
     }
-
-    public abstract void Update(TimeSpan deltaTime);
 }

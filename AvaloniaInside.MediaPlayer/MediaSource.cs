@@ -10,6 +10,7 @@ public unsafe partial class MediaSource : IMediaSource
     // CODEC
     private AVCodec* _audioCodec;
     private AVFormatContext* _formatContext;
+    private bool _isInitialized;
 
     // PACKETS
     private AVPacket* _packet;
@@ -44,23 +45,11 @@ public unsafe partial class MediaSource : IMediaSource
             ffmpeg.av_init_packet(packet);
             if (ffmpeg.av_read_frame(_formatContext, packet) == 0)
             {
-                if (packet->stream_index == _videoStreamId)
-                {
-                    //validPacket = DecodeVideo(packet);
-                }
-                else if (packet->stream_index == _audioStreamId)
-                {
-                    validPacket = DecodeAudio(packet);
-                }
-                else
-                {
-                    Console.WriteLine("Discarding packet for stream " + packet->stream_index);
-                }
+                validPacket = ReadAndDecodePacket(packet);
             }
             else
             {
-                _playingToEof = true;
-                EndOfMediaReached?.Invoke(this, new EndOfMediaEventArgs());
+                HandleFailedPacketReading();
             }
 
             ffmpeg.av_packet_unref(packet);
@@ -68,6 +57,28 @@ public unsafe partial class MediaSource : IMediaSource
 
         ReturnPacket(packet);
         return validPacket;
+    }
+    
+    private Packet? ReadAndDecodePacket(AVPacket* packet)
+    {
+        if (packet->stream_index == _videoStreamId)
+        {
+            return DecodeVideo(packet);
+        }
+        else if (packet->stream_index == _audioStreamId)
+        {
+            return DecodeAudio(packet);
+        }
+        else
+        {
+            Console.WriteLine($"Discarding packet for stream {packet->stream_index}");
+            return null;
+        }
+    }
+    private void HandleFailedPacketReading()
+    {
+        _playingToEof = true;
+        EndOfMediaReached?.Invoke(this, new EndOfMediaEventArgs());
     }
 
     public void Dispose()
@@ -80,8 +91,11 @@ public unsafe partial class MediaSource : IMediaSource
         GC.SuppressFinalize(this);
     }
 
-    public void Init()
+    public void Initialize()
     {
+        if (_isInitialized)
+            return;
+
         AVFormatContext* formatContext;
         var ret = ffmpeg.avformat_open_input(&formatContext, _mediaPath, null, null);
         if (ret != 0 || formatContext == null)
@@ -121,7 +135,11 @@ public unsafe partial class MediaSource : IMediaSource
         if (_formatContext->duration != ffmpeg.AV_NOPTS_VALUE)
             MediaLength = TimeSpan.FromTicks((long)(_formatContext->duration / 1000d * TimeSpan.TicksPerMillisecond));
         if (HasVideo || HasAudio)
+        {
+            _isInitialized = true;
             return;
+        }
+
         Console.WriteLine("Failed to load audio or video");
         Dispose();
     }

@@ -15,6 +15,7 @@ public unsafe partial class MediaSource
 
     public int AudioSampleRate => HasAudio ? _audioContext->sample_rate : -1;
     public int AudioChannelCount { get; private set; } = -1;
+    public int BytesPerSample { get; private set; } = 2;
 
     private void InitAudio()
     {
@@ -49,6 +50,7 @@ public unsafe partial class MediaSource
         }
 
         AudioChannelCount = 2;
+        BytesPerSample = ffmpeg.av_get_bytes_per_sample(_audioContext->sample_fmt) / 2; // HELP NEEDED HERE
     }
 
     private bool AttemptToInitAudioByAvailableDecoder()

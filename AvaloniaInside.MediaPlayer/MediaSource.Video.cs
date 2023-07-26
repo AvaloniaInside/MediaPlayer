@@ -13,4 +13,9 @@ public unsafe partial class MediaSource : IMediaSource
     {
         
     }
+
+    private VideoPacket? DecodeVideo(AVPacket* packet)
+    {
+        return null;
+    }
 }

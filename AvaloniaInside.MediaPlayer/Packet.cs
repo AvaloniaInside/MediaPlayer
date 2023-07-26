@@ -1,6 +1,9 @@
+using static System.GC;
+
 namespace AvaloniaInside.MediaPlayer;
 
-public abstract class Packet : IDisposable {
+public abstract class Packet {
     ~Packet() => Dispose();
-    public virtual void Dispose() => GC.SuppressFinalize(this);
+    public virtual void Dispose() => SuppressFinalize(this);
+
 }

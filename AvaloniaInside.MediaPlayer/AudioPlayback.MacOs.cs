@@ -2,15 +2,15 @@ using AVFoundation;
 
 namespace AvaloniaInside.MediaPlayer;
 
-public class AppleAudioPlayback : Playback<AudioPacket>
+public class AudioPlayback : Playback<AudioPacket>
 {
     private AVAudioEngine _audioEngine;
     private AVAudioFormat _audioFormat;
     private AVAudioPlayerNode _playerNode;
 
-    public override void Init(IMediaSource mediaSource)
+    public override void Initialize()
     {
-        base.Init(mediaSource);
+        base.Initialize();
         // Set up the audio engine and player node
         _audioEngine = new AVAudioEngine();
         _playerNode = new AVAudioPlayerNode();
@@ -25,16 +25,11 @@ public class AppleAudioPlayback : Playback<AudioPacket>
         _audioEngine.StartAndReturnError(out error);
         if (error != null)
             Console.WriteLine($"Error starting audio engine: {error}");
-        _isInitialized = true;
-    }
-
-    internal override void SourceReloaded()
-    {
     }
 
     public override void Update(TimeSpan deltaTime)
     {
-        if (!_isInitialized)
+        if (!IsInitialized)
             throw new InvalidOperationException("Audio playback is not initialized");
         while (PacketQueue.TryTake(out var packet)) PlayWaveBuffer(packet);
     }
@@ -48,9 +43,9 @@ public class AppleAudioPlayback : Playback<AudioPacket>
         }
 
         // Set up the audio format based on the wave data
-        var sampleRate = _mediaSource.AudioSampleRate; // Adjust the sample rate as needed
-        var channels = _mediaSource.AudioChannelCount; // Mono audio
-        var bytesPerSample = 2; // 16-bit audio
+        var sampleRate = MediaSource.AudioSampleRate; // Adjust the sample rate as needed
+        var channels = MediaSource.AudioChannelCount;
+        var bytesPerSample = MediaSource.BytesPerSample;
         _audioFormat = new AVAudioFormat(sampleRate, (uint)channels);
 
         _playerNode.Play();
@@ -85,5 +80,10 @@ public class AppleAudioPlayback : Playback<AudioPacket>
 
         buffer.FrameLength = (uint)frameLength;
         _playerNode.ScheduleBuffer(buffer, () => { Console.WriteLine("Wave buffer playback completed."); });
+    }
+
+    protected override void OnSourceReloaded()
+    {
+        throw new NotImplementedException();
     }
 }

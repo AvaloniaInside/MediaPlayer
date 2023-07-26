@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-		<TargetFrameworks>net6.0;net6.0-macos</TargetFrameworks>
+		<TargetFrameworks>net6.0-macos</TargetFrameworks>
 		<ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

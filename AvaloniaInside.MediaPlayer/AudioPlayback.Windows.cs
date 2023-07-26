@@ -7,13 +7,13 @@ public class AudioPlayback : Playback<AudioPacket>
     private WaveOutEvent _outputDevice;
     private BufferedWaveProvider _waveProvider;
 
-    public override void Init(IMediaSource mediaSource)
+    public override void Initialize()
     {
-        base.Init(mediaSource);
-        _waveProvider = new BufferedWaveProvider(new WaveFormat(mediaSource.AudioSampleRate, mediaSource.AudioChannelCount));
+        base.Initialize();
+        _waveProvider =
+            new BufferedWaveProvider(new WaveFormat(MediaSource.AudioSampleRate, MediaSource.AudioChannelCount));
         _outputDevice = new WaveOutEvent();
         _outputDevice.Init(_waveProvider);
-        _isInitialized = true;
     }
 
     public override void Dispose()
@@ -24,15 +24,16 @@ public class AudioPlayback : Playback<AudioPacket>
         base.Dispose();
     }
 
-    internal override void SourceReloaded()
+    protected override void OnSourceReloaded()
     {
+        throw new NotImplementedException();
     }
 
     public override void Update(TimeSpan deltaTime)
     {
-        if(!_isInitialized)
+        if (!IsInitialized)
             throw new InvalidOperationException("Audio playback is not initialized");
-        while (PacketQueue.TryTake(out var packet))
-            _waveProvider.AddSamples(packet.SampleBuffer, 0, packet.SampleBuffer.Length);
+        while (PacketQueue.TryTake(out var packet) && packet is AudioPacket audioPacket)
+            _waveProvider.AddSamples(audioPacket.SampleBuffer, 0, audioPacket.SampleBuffer.Length);
     }
 }
